@@ -1,0 +1,122 @@
+---
+title: "R Code: ACT-R + ML for Game UX"
+author: "Bahareh Jozranjbar"
+output: html_document
+---
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(randomForest)
+library(caret)
+
+# Set random seed
+set.seed(42)
+
+# Generate synthetic user data
+n <- 1000  # Sample size
+
+data <- data.frame(
+  Player_ID = 1:n,
+  RT_Visual = rnorm(n, mean = 250, sd = 50),
+  RT_Cognitive = rnorm(n, mean = 300, sd = 60),
+  RT_Motor = rnorm(n, mean = 200, sd = 40),
+  Error_Rate = rbinom(n, 1, 0.1),
+  Cognitive_Load = rnorm(n, mean = 4, sd = 1.5)
+)
+
+# Simulate ACT-R cognitive modeling
+actr_params <- data.frame(
+  Visual_Encoding = rnorm(n, mean = 250, sd = 50),
+  Decision_Time = rnorm(n, mean = 300, sd = 60),
+  Motor_Execution = rnorm(n, mean = 200, sd = 40),
+  Memory_Retrieval = rnorm(n, mean = 120, sd = 30),
+  Cognitive_Load_Penalty = rnorm(n, mean = 20, sd = 5)
+)
+
+# Calculate ACT-R-based total reaction time
+data$ACTR_Total_RT <- actr_params$Visual_Encoding +
+                      actr_params$Decision_Time +
+                      actr_params$Motor_Execution +
+                      actr_params$Memory_Retrieval +
+                      (data$Cognitive_Load * actr_params$Cognitive_Load_Penalty)
+
+# Train-test split
+set.seed(42)
+trainIndex <- createDataPartition(data$ACTR_Total_RT, p = 0.8, list = FALSE)
+trainData <- data[trainIndex,]
+testData <- data[-trainIndex,]
+
+# Train Random Forest Model
+rf_model <- randomForest(ACTR_Total_RT ~ RT_Visual + RT_Cognitive + RT_Motor + Error_Rate + Cognitive_Load,
+                         data = trainData, ntree = 100, importance = TRUE, random_state = 42)
+
+# Save directory
+save_dir <- "game_ux_plots"
+dir.create(save_dir, showWarnings = FALSE)
+
+
+theme_clean <- theme_minimal(base_size = 42) +  
+               theme(panel.background = element_rect(fill = "transparent", color = NA),
+                     plot.background = element_rect(fill = "transparent", color = NA),
+                     panel.grid.major = element_blank(), 
+                     panel.grid.minor = element_blank(),
+                     axis.text = element_text(size = 40, color = "white"),  # 
+                     axis.title = element_text(size = 46, face = "bold", color = "white"), 
+                     plot.title = element_text(size = 50, face = "bold", hjust = 0.5, color = "white"),  # Large white title
+                     legend.text = element_text(size = 40, color = "white"),
+                     legend.title = element_text(size = 44, face = "bold", color = "white"))
+
+# Feature Importance Plot
+importance <- as.data.frame(importance(rf_model))
+importance$Feature <- rownames(importance)
+
+png(file.path(save_dir, "feature_importance.png"), width=2000, height=1200, bg="transparent")
+ggplot(importance, aes(x = reorder(Feature, IncNodePurity), y = IncNodePurity)) +
+  geom_bar(stat = "identity", fill = "#A6A6A6", width=0.6) +  
+  coord_flip() +
+  labs(title = "Feature Importance in Predicting Reaction Time",
+       x = "Feature", y = "Importance") +
+  theme_clean
+dev.off()
+
+# Cognitive Load vs Reaction Time Scatterplot
+png(file.path(save_dir, "cognitive_load_vs_rt.png"), width=2000, height=1200, bg="transparent")
+ggplot(data, aes(x = Cognitive_Load, y = ACTR_Total_RT)) +
+  geom_point(alpha = 0.7, color = "#FF8C00", size=6) +  
+  geom_smooth(method = "lm", color = "#FFA500", size=4) +  
+  labs(title = "Impact of Cognitive Load on Reaction Time",
+       x = "Cognitive Load (NASA-TLX Scale)",
+       y = "Total Reaction Time (ms)") +
+  theme_clean
+dev.off()
+
+# Histogram of Reaction Time Distribution 
+png(file.path(save_dir, "reaction_time_distribution.png"), width=2000, height=1200, bg="transparent")
+ggplot(data, aes(x = ACTR_Total_RT)) +
+  geom_histogram(binwidth = 50, fill = "#D9D9D9", alpha = 0.9, color="black") +  # Light gray bars with black borders
+  labs(title = "Distribution of Player Reaction Times",
+       x = "Total Reaction Time (ms)", y = "Frequency") +
+  theme_clean
+dev.off()
+
+# Error Rate Pie Chart
+error_counts <- table(data$Error_Rate)
+labels <- c("Correct Key Press", "Wrong Key Press")
+
+png(file.path(save_dir, "error_rate.png"), width=2000, height=2000, bg="transparent")
+par(mar=c(10,10,10,10)) 
+pie(error_counts, 
+    labels = paste(labels, round(100 * prop.table(error_counts), 1), "%"),
+    col = c("#A6A6A6", "#FF8C00"),  # Gray & Orange colors
+    main = "Error Rate in Weapon Switching Task", 
+    cex.main=5,   # Even Bigger Title
+    cex=4,      # Extra Large Labels
+    radius = 0.5, # Smaller pie for better label placement
+    col.main="white", col.lab="white")  # White labels
+dev.off()
+
+
+```
+
+
